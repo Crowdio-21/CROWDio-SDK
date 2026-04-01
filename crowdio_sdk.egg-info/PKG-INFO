@@ -1,0 +1,73 @@
+Metadata-Version: 2.4
+Name: crowdio-sdk
+Version: 0.3.0
+Summary: CROWDio SDK for distributed Python task execution
+Author: CROWDio Team
+License-Expression: MIT
+Project-URL: Homepage, https://crowdio-21.github.io/Docs/docs/
+Project-URL: Repository, https://github.com/Crowdio-21
+Project-URL: Issues, https://github.com/your-org/CROWDio/issues
+Keywords: distributed-computing,sdk,websocket,checkpointing,mobile-crowd-computing,python,volunteer-computing,edge-computing,task-scheduling,resource-management,data-processing,machine-learning,ai,iot,mobile-devices,cloud-computing,serverless-computing,parallel-computing,high-performance-computing
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3 :: Only
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: websockets>=12.0
+Provides-Extra: image
+Requires-Dist: Pillow>=10.0.0; extra == "image"
+Dynamic: license-file
+
+# CROWDio SDK
+
+CROWDio SDK provides client-side tools for submitting distributed Python workloads to a CROWDio foreman.
+
+## Included Packages
+
+- `developer_sdk`: public client APIs, decorators, and image utility helpers.
+- `common`: shared protocol and serialization utilities used by the SDK runtime.
+
+## Install
+
+```bash
+pip install crowdio-sdk
+```
+
+Install optional image processing dependencies:
+
+```bash
+pip install "crowdio-sdk[image]"
+```
+
+## Quick Start
+
+```python
+import asyncio
+from developer_sdk import crowdio_connect, crowdio_map, crowdio_disconnect
+
+
+def square(x):
+    return x * x
+
+
+async def main():
+    await crowdio_connect("localhost", 9000)
+    results = await crowdio_map(square, [1, 2, 3, 4])
+    print(results)
+    await crowdio_disconnect()
+
+
+asyncio.run(main())
+```
+
+## Notes
+
+- The package requires a reachable CROWDio foreman endpoint.
+- Image utilities under `developer_sdk.image_utils` require Pillow (install with `[image]` extra).

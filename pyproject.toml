@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crowdio-sdk"
+version = "0.3.0"
+description = "CROWDio SDK for distributed Python task execution"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+authors = [
+  { name = "CROWDio Team" }
+]
+keywords = ["distributed-computing", "sdk", "websocket", "checkpointing", "mobile-crowd-computing", "python", "volunteer-computing", "edge-computing", "task-scheduling", "resource-management", "data-processing", "machine-learning", "ai", "iot", "mobile-devices", "cloud-computing", "serverless-computing", "parallel-computing", "high-performance-computing"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+  "websockets>=12.0",
+]
+
+[project.optional-dependencies]
+image = [
+  "Pillow>=10.0.0",
+]
+
+[project.urls]
+Homepage = "https://crowdio-21.github.io/Docs/docs/"
+Repository = "https://github.com/Crowdio-21"
+Issues = "https://github.com/your-org/CROWDio/issues"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["developer_sdk*", "common*"]
+exclude = ["example*"]

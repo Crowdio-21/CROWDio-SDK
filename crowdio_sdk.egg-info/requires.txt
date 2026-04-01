@@ -1,0 +1,4 @@
+websockets>=12.0
+
+[image]
+Pillow>=10.0.0

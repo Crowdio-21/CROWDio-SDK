@@ -281,11 +281,3 @@ def CROWDio_create_state_dict(checkpoint_state: List[str]) -> Dict[str, Any]:
     return {var: None for var in checkpoint_state}
 
 
-class CROWDioNamespace:
-    """Namespace class for @CROWDio.task decorator style"""
-
-    task = staticmethod(CROWDio_task)
-    Constant = CROWDioConstant
-
-
-CROWDio = CROWDioNamespace()
