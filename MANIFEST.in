@@ -1,0 +1,5 @@
+prune developer_sdk
+prune example
+prune dist
+prune build
+prune crowdio_sdk.egg-info

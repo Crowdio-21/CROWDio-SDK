@@ -1,28 +1,4 @@
-"""
-CROWDio - Distributed Python Computing SDK
-
-Provides declarative checkpointing support for distributed task execution.
-
-Usage:
-    import developer_sdk as CROWDio
-
-    @CROWDio.task(
-        checkpoint=True,
-        checkpoint_interval=5,
-        checkpoint_state=["i", "result", "progress_percent"]
-    )
-    def my_task(state, data):
-        for i in range(state.get("i", 0), len(data)):
-            state["i"] = i
-            state["result"] = process(data[i])
-            state["progress_percent"] = (i + 1) / len(data) * 100
-        return state["result"]
-
-    async def main():
-        await CROWDio_connect("localhost", 9000)
-        results = await CROWDio_map(my_task, data_list)
-        await CROWDio_disconnect()
-"""
+"""CROWDio public SDK package."""
 
 from .api import (
     # Preferred lowercase API
@@ -43,6 +19,10 @@ from .api import (
     CROWDio_get,
     CROWDio_submit,
     CROWDio_pipeline,
+    # Declarative task namespace
+    CROWDio,
+)
+from .decorators import (
     # Declarative task API
     CROWDio_task,
     CROWDioTaskMetadata,
@@ -51,11 +31,10 @@ from .api import (
     CROWDio_get_task_config,
     CROWDio_is_checkpoint_task,
     CROWDio_create_state_dict,
-    CROWDioConstant,
-    CROWDio,
 )
+from .constants import CROWDioConstant
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 __all__ = [
     # Preferred lowercase API
     "crowdio_connect",

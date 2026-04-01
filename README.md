@@ -4,7 +4,7 @@ CROWDio SDK provides client-side tools for submitting distributed Python workloa
 
 ## Included Packages
 
-- `developer_sdk`: public client APIs, decorators, and image utility helpers.
+- `crowdio`: public client APIs, decorators, and image utility helpers.
 - `common`: shared protocol and serialization utilities used by the SDK runtime.
 
 ## Install
@@ -23,7 +23,7 @@ pip install "crowdio-sdk[image]"
 
 ```python
 import asyncio
-from developer_sdk import crowdio_connect, crowdio_map, crowdio_disconnect
+from crowdio import crowdio_connect, crowdio_map, crowdio_disconnect
 
 
 def square(x):
@@ -43,4 +43,4 @@ asyncio.run(main())
 ## Notes
 
 - The package requires a reachable CROWDio foreman endpoint.
-- Image utilities under `developer_sdk.image_utils` require Pillow (install with `[image]` extra).
+- Image utilities under `crowdio.image_utils` require Pillow (install with `[image]` extra).

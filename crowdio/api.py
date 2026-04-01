@@ -1,15 +1,7 @@
 from .client import CrowdComputeClient
 from .decorators import (
     CROWDio_task,
-    CROWDioTaskMetadata,
-    CROWDioTaskConfig,
-    CROWDio_get_task_metadata,
-    CROWDio_get_task_config,
-    CROWDio_is_checkpoint_task,
-    CROWDio_create_state_dict,
-    CROWDio,
 )
-from .constants import CROWDioConstant
 from typing import Any, Callable, List, Optional, Dict
 
 # Global client instance
@@ -159,6 +151,15 @@ async def CROWDio_pipeline(
         ])
     """
     return await _client.pipeline(stages, dependency_map=dependency_map, **kwargs)
+
+
+class CROWDioNamespace:
+    """Namespace class to support @CROWDio.task decorator style."""
+
+    task = staticmethod(CROWDio_task)
+
+
+CROWDio = CROWDioNamespace()
 
 
 # ============================================================================

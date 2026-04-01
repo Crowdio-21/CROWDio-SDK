@@ -5,7 +5,7 @@ Reusable image preprocessing, chunking, and aggregation helpers for
 distributed image processing pipelines built on CrowdIO.
 
 Usage:
-    from developer_sdk.image_utils import (
+    from crowdio.image_utils import (
         split_image_into_tiles,
         reassemble_tiles,
         apply_filter,

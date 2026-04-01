@@ -43,7 +43,7 @@ import argparse
 # Add project root to path so imports resolve
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from developer_sdk import crowdio_connect, crowdio_disconnect, CROWDio, crowdio_pipeline
+from crowdio import crowdio_connect, crowdio_disconnect, CROWDio, crowdio_pipeline
 
 @CROWDio.task(
     checkpoint=True,
