@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://crowdio-21.github.io/schemas/shard-manifest-v1.json",
+  "title": "CROWDio shard catalogue manifest",
+  "description": "One manifest per model version. Structural rules that JSON Schema cannot express (atom_map matches num_layers/cut_grid, layer bounds match the atom map, one embed and one head per precision, encoder ranges cover every atom, complete_encoder_ranges implies all A(A+1)/2 ranges) are enforced by crowdio.catalogue.validate_manifest.",
+  "type": "object",
+  "required": [
+    "manifest_version", "model_id", "version", "source", "num_layers", "hidden_size",
+    "cut_grid", "num_atoms", "atom_map", "shards", "flops_estimation",
+    "exporter_version", "created_at", "complete_encoder_ranges", "has_full_shard"
+  ],
+  "properties": {
+    "manifest_version": {"const": 1},
+    "model_id": {"type": "string", "minLength": 1},
+    "version": {"type": "integer", "minimum": 1},
+    "source": {
+      "type": "object",
+      "description": "Where the weights came from: name_or_path, architecture, task, num_labels, id2label.",
+      "additionalProperties": true
+    },
+    "num_layers": {"type": "integer", "minimum": 1},
+    "hidden_size": {"type": "integer", "minimum": 1},
+    "cut_grid": {"type": "integer", "minimum": 1, "description": "Transformer layers per atom."},
+    "num_atoms": {"type": "integer", "minimum": 1},
+    "atom_map": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["atom", "start_layer", "end_layer"],
+        "properties": {
+          "atom": {"type": "integer", "minimum": 0},
+          "start_layer": {"type": "integer", "minimum": 0},
+          "end_layer": {"type": "integer", "minimum": 0}
+        },
+        "additionalProperties": false
+      }
+    },
+    "complete_encoder_ranges": {
+      "type": "boolean",
+      "description": "True when every contiguous atom range is exported; false for a chosen subset."
+    },
+    "has_full_shard": {"type": "boolean"},
+    "flops_estimation": {
+      "type": "object",
+      "required": ["method", "unit", "reference_seq_len"],
+      "properties": {
+        "method": {"type": "string"},
+        "unit": {"type": "string"},
+        "reference_seq_len": {"type": "integer", "minimum": 1},
+        "formula": {"type": "string"}
+      }
+    },
+    "exporter_version": {"type": "string"},
+    "created_at": {"type": "string"},
+    "shards": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/ShardSpec"}}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Dim": {
+      "oneOf": [
+        {"type": "integer", "minimum": 1},
+        {"type": "string", "minLength": 1, "description": "Symbolic axis such as batch or seq."}
+      ]
+    },
+    "TensorSpec": {
+      "type": "object",
+      "required": ["name", "dtype", "shape"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "dtype": {"enum": ["float32", "float16", "int64", "int32", "int8", "uint8", "bool"]},
+        "shape": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/Dim"}},
+        "binds_to": {
+          "type": ["string", "null"],
+          "description": "Name of the next shard's input this output feeds."
+        }
+      },
+      "additionalProperties": false
+    },
+    "ShardSpec": {
+      "type": "object",
+      "required": [
+        "shard_id", "model_id", "role", "start_atom", "end_atom", "start_layer", "end_layer",
+        "pinned", "file", "bytes", "flops", "in_act_bytes_per_token", "out_act_bytes_per_token",
+        "tensors", "sha256", "precision", "runtime_format", "external_data_files",
+        "exporter_version"
+      ],
+      "properties": {
+        "shard_id": {"type": "string", "minLength": 1},
+        "model_id": {"type": "string", "minLength": 1},
+        "role": {"enum": ["embed", "encoder", "head", "full"]},
+        "start_atom": {"type": ["integer", "null"], "minimum": 0},
+        "end_atom": {"type": ["integer", "null"], "minimum": 0},
+        "start_layer": {"type": ["integer", "null"], "minimum": 0},
+        "end_layer": {"type": ["integer", "null"], "minimum": 0},
+        "pinned": {"type": "boolean"},
+        "file": {"type": "string", "description": "Path of the .onnx file relative to the manifest."},
+        "bytes": {"type": "integer", "minimum": 1, "description": "Size of the main file."},
+        "flops": {"type": "integer", "minimum": 0, "description": "See flops_estimation."},
+        "in_act_bytes_per_token": {"type": "integer", "minimum": 0},
+        "out_act_bytes_per_token": {"type": "integer", "minimum": 0},
+        "out_act_bytes_per_sequence": {
+          "type": "integer", "minimum": 0,
+          "description": "Extension: outputs not proportional to tokens (head logits)."
+        },
+        "tensors": {
+          "type": "object",
+          "required": ["inputs", "outputs"],
+          "properties": {
+            "inputs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/TensorSpec"}},
+            "outputs": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/TensorSpec"}}
+          },
+          "additionalProperties": false
+        },
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "precision": {"enum": ["fp32", "fp16", "int8"]},
+        "runtime_format": {"enum": ["onnx", "ort"]},
+        "external_data_files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "bytes", "sha256"],
+            "properties": {
+              "path": {"type": "string"},
+              "bytes": {"type": "integer", "minimum": 0},
+              "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "exporter_version": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

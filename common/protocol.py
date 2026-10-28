@@ -16,6 +16,7 @@ class MessageType(Enum):
     """Message types for WebSocket communication"""
     # Client -> Foreman
     SUBMIT_JOB = "submit_job"
+    SUBMIT_BROADCAST_JOB = "submit_broadcast_job"
     SUBMIT_PIPELINE_JOB = "submit_pipeline_job"
     GET_RESULTS = "get_results"
     DISCONNECT = "disconnect"
@@ -24,7 +25,8 @@ class MessageType(Enum):
     ASSIGN_TASK = "assign_task"
     PING = "ping"
     RESUME_TASK = "resume_task"
-    
+    KILL_TASK = "kill_task"
+
     # Worker -> Foreman
     TASK_RESULT = "task_result"
     TASK_ERROR = "task_error"
@@ -32,7 +34,8 @@ class MessageType(Enum):
     WORKER_HEARTBEAT = "worker_heartbeat"
     PONG = "pong"
     TASK_CHECKPOINT = "task_checkpoint"
-    TASK_PROGRESS = "task_progress" 
+    TASK_PROGRESS = "task_progress"
+    KILL_ACK = "kill_ack"
     
     # Foreman -> Client
     JOB_RESULTS = "job_results"
@@ -103,6 +106,39 @@ def create_submit_job_message(func_code: str, args_list: List[Any], job_id: str)
     )
 
 
+def create_submit_broadcast_job_message(
+    func_code: str,
+    base_args: Any,
+    job_id: str,
+    target_workers: int,
+    task_metadata: Optional[Dict[str, Any]] = None,
+) -> Message:
+    """
+    Create a broadcast job submission message.
+
+    Broadcast semantics: run the same task payload once per target worker.
+    """
+    count = max(int(target_workers), 1)
+    args_list = [base_args for _ in range(count)]
+
+    data = {
+        "func_code": func_code,
+        "args_list": args_list,
+        "total_tasks": len(args_list),
+        "broadcast": True,
+        "target_workers": count,
+    }
+
+    if task_metadata:
+        data["task_metadata"] = task_metadata
+
+    return Message(
+        msg_type=MessageType.SUBMIT_BROADCAST_JOB,
+        data=data,
+        job_id=job_id,
+    )
+
+
 def create_submit_pipeline_job_message(
     job_id: str,
     stages: List[Dict[str, Any]],
@@ -154,6 +190,21 @@ def create_job_accepted_message(job_id: str) -> Message:
         {"job_id": job_id},
         job_id
     )
+
+
+def create_kill_task_message(task_id: str, job_id: str) -> Message:
+    """Create a kill task message (Foreman -> Worker)"""
+    return Message(
+        msg_type=MessageType.KILL_TASK, data={"task_id": task_id}, job_id=job_id
+    )
+
+
+def create_kill_ack_message(task_id: str, job_id: str) -> Message:
+    """Create a kill acknowledgement message (Worker -> Foreman)"""
+    return Message(
+        msg_type=MessageType.KILL_ACK, data={"task_id": task_id}, job_id=job_id
+    )
+
 
 def create_assign_task_message(func_code: str, task_args: List[Any], task_id: str, job_id: str) -> Message:
     """Create a task assignment message"""

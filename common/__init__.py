@@ -15,6 +15,10 @@ from .protocol import (
     RecoveryStatus,
     create_worker_ready_message,
     create_submit_job_message,
+    create_submit_broadcast_job_message,
+    create_submit_pipeline_job_message,
+    create_kill_task_message,
+    create_kill_ack_message,
     create_assign_task_message,
     create_assign_task_message_with_metadata,
     create_resume_task_message,
@@ -38,6 +42,10 @@ from .serializer import (
     serialize_function,
     deserialize_function_for_PC,
     get_runtime_info,
+    serialize_tensor,
+    deserialize_tensor,
+    encode_feature_payload,
+    decode_feature_payload,
 )
 
 __all__ = [
@@ -48,6 +56,10 @@ __all__ = [
     "RecoveryStatus",
     "create_worker_ready_message",
     "create_submit_job_message",
+    "create_submit_broadcast_job_message",
+    "create_submit_pipeline_job_message",
+    "create_kill_task_message",
+    "create_kill_ack_message",
     "create_assign_task_message",
     "create_assign_task_message_with_metadata",
     "create_resume_task_message",
@@ -65,4 +77,8 @@ __all__ = [
     "serialize_function",
     "deserialize_function_for_PC",
     "get_runtime_info",
+    "serialize_tensor",
+    "deserialize_tensor",
+    "encode_feature_payload",
+    "decode_feature_payload",
 ]

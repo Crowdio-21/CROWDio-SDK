@@ -1,4 +1,5 @@
 from .client import CrowdComputeClient
+from .declarative import Capabilities, JobHandle, ModelDescription
 from .decorators import (
     CROWDio_task,
 )
@@ -11,7 +12,7 @@ _client = CrowdComputeClient()
 # CROWDio Distributed Computing API
 # ============================================================================
 
-async def CROWDio_connect(host: str, port: int = 9000):
+async def CROWDio_connect(host: str, port: int = 9000, **kwargs):
     """
     CROWDio_connect - Initialize the CROWDio environment and connect to foreman
 
@@ -21,8 +22,10 @@ async def CROWDio_connect(host: str, port: int = 9000):
     Args:
         host: Hostname/IP of foreman server
         port: Port number (default 9000)
+        **kwargs: http_port (default 8000), negotiate (default True),
+            hello_timeout (default 2.0 s), catalogue_url
     """
-    await _client.connect(host, port)
+    await _client.connect(host, port, **kwargs)
 
 
 async def CROWDio_disconnect():
@@ -153,6 +156,62 @@ async def CROWDio_pipeline(
     return await _client.pipeline(stages, dependency_map=dependency_map, **kwargs)
 
 
+# ============================================================================
+# Declarative model jobs (optional; the Foreman plans)
+# ============================================================================
+
+async def CROWDio_submit_job(
+    model_id: str,
+    inputs: List[Any],
+    objective: str = "min_completion_time",
+    deadline_ms: Optional[float] = None,
+    options: Optional[Dict[str, Any]] = None,
+    model_version: Optional[int] = None,
+) -> JobHandle:
+    """
+    CROWDio_submit_job - Run a catalogue model on a batch of inputs
+
+    The request names a model and an objective only; the Foreman chooses the
+    cut and the workers. Inputs are validated locally against the model's
+    manifest before anything is sent.
+
+    Args:
+        model_id: Catalogue entry on the Foreman
+        inputs: Requests; each is token ids or a dict with input_ids,
+            optional attention_mask and optional request_id
+        objective: "min_completion_time" or "min_latency_with_deadline"
+        deadline_ms: Required for "min_latency_with_deadline"
+        options: Reserved hints: max_workers, allow_recut, route_mode
+        model_version: Catalogue version (default: latest)
+
+    Returns:
+        JobHandle with status(), results(), stream() and cancel()
+
+    Raises:
+        InvalidRequest: The request failed local validation
+        UnsupportedByForeman: The Foreman has no declarative path; use
+            CROWDio_pipeline instead
+    """
+    return await _client.declarative.submit_job(
+        model_id, inputs, objective, deadline_ms, options, model_version
+    )
+
+
+async def CROWDio_list_models() -> List[Dict[str, Any]]:
+    """CROWDio_list_models - Manifest summaries of every catalogue model"""
+    return await _client.declarative.list_models()
+
+
+async def CROWDio_describe_model(model_id: str, version: Optional[int] = None) -> ModelDescription:
+    """CROWDio_describe_model - Layers, cut grid, ranges, shard sizes and tensor contracts"""
+    return await _client.declarative.describe_model(model_id, version)
+
+
+async def CROWDio_capabilities(timeout: Optional[float] = None) -> Capabilities:
+    """CROWDio_capabilities - Protocol version and Foreman features from the handshake"""
+    return await _client.declarative.capabilities(timeout)
+
+
 class CROWDioNamespace:
     """Namespace class to support @CROWDio.task decorator style."""
 
@@ -173,4 +232,11 @@ crowdio_run = CROWDio_run
 crowdio_get = CROWDio_get
 crowdio_submit = CROWDio_submit
 crowdio_pipeline = CROWDio_pipeline
+crowdio_submit_job = CROWDio_submit_job
+crowdio_list_models = CROWDio_list_models
+crowdio_describe_model = CROWDio_describe_model
+crowdio_capabilities = CROWDio_capabilities
+submit_job = CROWDio_submit_job
+list_models = CROWDio_list_models
+describe_model = CROWDio_describe_model
 task = CROWDio_task

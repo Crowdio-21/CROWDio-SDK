@@ -16,7 +16,9 @@ from common.code_instrumenter import (
     instrument_for_task_control,
     generate_runtime_wrappers,
 )
+from common.client_protocol import ClientEnvelope
 from .decorators import CROWDio_get_task_metadata, CROWDioTaskMetadata
+from .declarative import DeclarativeSession
 
 
 class CrowdComputeClient:
@@ -30,9 +32,24 @@ class CrowdComputeClient:
         self.pending_jobs: Dict[str, asyncio.Future] = {}
         self._listen_task: Optional[asyncio.Task] = None
         self._submitted_jobs: Dict[str, Dict[str, Any]] = {}
+        self.declarative = DeclarativeSession(self)
 
-    async def connect(self, host: str, port: int = 9000):
-        """Connect to foreman server"""
+    async def connect(
+        self,
+        host: str,
+        port: int = 9000,
+        http_port: int = 8000,
+        negotiate: bool = True,
+        hello_timeout: float = 2.0,
+        catalogue_url: Optional[str] = None,
+    ):
+        """Connect to foreman server
+
+        With ``negotiate`` a capability ``hello`` is sent without waiting; the
+        declarative API awaits the answer (up to ``hello_timeout`` seconds).
+        Legacy calls never wait for it. ``http_port`` / ``catalogue_url`` locate
+        the Foreman's REST catalogue.
+        """
         try:
             self.foreman_host = host
             self.foreman_port = port
@@ -55,6 +72,11 @@ class CrowdComputeClient:
             # Start listening for responses
             self._listen_task = asyncio.create_task(self._listen_for_messages())
 
+            self.declarative.http_base = catalogue_url or f"http://{host}:{http_port}"
+            self.declarative.hello_timeout = hello_timeout
+            if negotiate:
+                await self.declarative.start_negotiation()
+
             print(f"Connected to foreman at {uri}")
 
         except Exception as e:
@@ -72,6 +94,7 @@ class CrowdComputeClient:
             self._listen_task.cancel()
             self._listen_task = None
 
+        self.declarative.close("disconnected")
         print("Disconnected from foreman")
 
     async def _listen_for_messages(self):
@@ -82,14 +105,22 @@ class CrowdComputeClient:
         except websockets.exceptions.ConnectionClosed:
             print("Connection to foreman closed")
             self.connected = False
+            self.declarative.close("connection to foreman closed")
         except Exception as e:
             print(f"Error in message listener: {e}")
             self.connected = False
+            self.declarative.close(f"message listener failed: {e}")
 
     async def _handle_message(self, message_str: str):
         """Handle incoming message from foreman"""
         try:
-            message = Message.from_json(message_str)
+            raw = json.loads(message_str)
+            envelope = ClientEnvelope.from_dict(raw)
+            if envelope is not None:
+                self.declarative.handle(envelope)
+                return
+
+            message = Message.from_dict(raw)
 
             if message.type == MessageType.JOB_RESULTS:
                 job_id = message.job_id

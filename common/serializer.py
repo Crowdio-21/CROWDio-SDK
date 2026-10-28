@@ -2,11 +2,22 @@
 Serialization utilities for CrowdCompute
 """
 
+import base64
 import inspect
+import io
 import re
 import sys
-import types 
-from typing import Any, Callable, List
+import types
+import zlib
+from typing import Any, Callable, Dict, List, Optional
+
+try:
+    import numpy as np
+except ImportError:
+    np = None
+
+
+DEFAULT_COMPRESS_LEVEL = 6
 
 
 def _env_info() -> str:
@@ -127,3 +138,115 @@ def hex_to_bytes(hex_str: str) -> bytes:
 def bytes_to_hex(data_bytes: bytes) -> str:
     """Convert bytes to hex string"""
     return data_bytes.hex()
+
+
+def serialize_tensor(
+    tensor: "np.ndarray",
+    compression: Optional[str] = "zlib",
+    compress_level: int = DEFAULT_COMPRESS_LEVEL,
+) -> Dict[str, Any]:
+    """Serialize numpy tensor to transport-friendly dict payload."""
+    if np is None:
+        raise ImportError("numpy is required for tensor serialization")
+    tensor = np.ascontiguousarray(tensor)
+
+    raw = tensor.tobytes(order="C")
+    codec = compression or "none"
+    encoded_bytes = raw
+
+    if codec == "zlib":
+        encoded_bytes = zlib.compress(raw, level=compress_level)
+    elif codec != "none":
+        raise ValueError(f"Unsupported compression codec: {codec}")
+
+    return {
+        "dtype": str(tensor.dtype),
+        "shape": list(tensor.shape),
+        "order": "C",
+        "compression": codec,
+        "payload_b64": base64.b64encode(encoded_bytes).decode("ascii"),
+    }
+
+
+def _decompress(raw: bytes, compression: Optional[str]) -> bytes:
+    codec = compression or "none"
+    if codec in ("zlib", "deflate"):
+        return zlib.decompress(raw)
+    if codec != "none":
+        raise ValueError(f"Unsupported compression codec: {codec}")
+    return raw
+
+
+def deserialize_tensor(payload: Any) -> "np.ndarray":
+    """
+    Deserialize transport payload back into numpy tensor.
+
+    Accepts the ``payload_b64`` format produced by :func:`serialize_tensor`,
+    ``.npy`` payloads carried as ``data_b64``, ``{"data": ...}`` wrappers and
+    plain nested lists.
+    """
+    if np is None:
+        raise ImportError("numpy is required for tensor deserialization")
+    if not isinstance(payload, dict):
+        return np.asarray(payload)
+
+    if "payload_b64" in payload:
+        raw = _decompress(base64.b64decode(payload["payload_b64"]), payload.get("compression"))
+        array = np.frombuffer(raw, dtype=np.dtype(payload["dtype"]))
+        return array.reshape(tuple(payload["shape"]))
+
+    if "data_b64" in payload:
+        raw = _decompress(base64.b64decode(payload["data_b64"]), payload.get("compression"))
+        return np.load(io.BytesIO(raw), allow_pickle=False)
+
+    if "data" in payload:
+        data = payload["data"]
+        if isinstance(data, dict):
+            return deserialize_tensor(data)
+        array = np.asarray(data, dtype=payload.get("dtype"))
+        if "shape" in payload:
+            array = array.reshape(tuple(payload["shape"]))
+        return array
+
+    raise ValueError("Unsupported tensor payload: expected payload_b64, data_b64 or data")
+
+
+def encode_feature_payload(payload: Any) -> Any:
+    """
+    Encode intermediate feature payload with tensor-aware serialization.
+
+    Recursively encodes nested structures (dicts, lists) and converts
+    numpy arrays to ``{"transport": "tensor_transport", "tensor_payload": ...}``.
+    """
+    if np is not None and isinstance(payload, np.ndarray):
+        return {
+            "transport": "tensor_transport",
+            "tensor_payload": serialize_tensor(payload),
+        }
+
+    if isinstance(payload, dict):
+        return {k: encode_feature_payload(v) for k, v in payload.items()}
+
+    if isinstance(payload, list):
+        return [encode_feature_payload(v) for v in payload]
+
+    return payload
+
+
+def decode_feature_payload(payload: Any) -> Any:
+    """
+    Decode intermediate feature payload and materialize serialized tensors.
+
+    Recognises both ``tensor_payload`` and the legacy ``tensor`` key.
+    """
+    if isinstance(payload, dict):
+        if payload.get("transport") == "tensor_transport":
+            tensor = payload.get("tensor_payload", payload.get("tensor"))
+            if tensor is not None:
+                return deserialize_tensor(tensor)
+        return {k: decode_feature_payload(v) for k, v in payload.items()}
+
+    if isinstance(payload, list):
+        return [decode_feature_payload(v) for v in payload]
+
+    return payload
