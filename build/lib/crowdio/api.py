@@ -1,0 +1,242 @@
+from .client import CrowdComputeClient
+from .declarative import Capabilities, JobHandle, ModelDescription
+from .decorators import (
+    CROWDio_task,
+)
+from typing import Any, Callable, List, Optional, Dict
+
+# Global client instance
+_client = CrowdComputeClient()
+
+# ============================================================================
+# CROWDio Distributed Computing API
+# ============================================================================
+
+async def CROWDio_connect(host: str, port: int = 9000, **kwargs):
+    """
+    CROWDio_connect - Initialize the CROWDio environment and connect to foreman
+
+    Establishes connection to the distributed computing cluster (foreman server).
+    Must be called before any distributed operations.
+
+    Args:
+        host: Hostname/IP of foreman server
+        port: Port number (default 9000)
+        **kwargs: http_port (default 8000), negotiate (default True),
+            hello_timeout (default 2.0 s), catalogue_url
+    """
+    await _client.connect(host, port, **kwargs)
+
+
+async def CROWDio_disconnect():
+    """
+    CROWDio_disconnect - Finalize CROWDio environment and disconnect
+
+    Cleanly closes the connection to the foreman server.
+    Should be called when all distributed work is complete.
+    """
+    await _client.disconnect()
+
+
+async def CROWDio_map(func: Callable, iterable: List[Any], **kwargs) -> List[Any]:
+    """
+    CROWDio_map - Distribute function across all workers and gather results
+
+    Sends tasks to all available workers in a collective operation.
+    If function is decorated with @CROWDio_task, checkpoint metadata is
+    automatically extracted and sent to workers for checkpoint-aware execution.
+
+    Args:
+        func: Function to execute (optionally decorated with @CROWDio_task)
+        iterable: List of arguments (one per worker process)
+        **kwargs: Additional options:
+            - checkpoint: Override checkpoint setting (bool)
+            - checkpoint_interval: Override checkpoint interval (float)
+
+    Returns:
+        List of results from all workers (same order as iterable)
+    """
+    return await _client.map(func, iterable, **kwargs)
+
+
+async def CROWDio_run(func: Callable, *args, **kwargs) -> Any:
+    """
+    CROWDio_run - Send a task to a single worker and receive result
+
+    Sends a single task to an available worker and waits for the result.
+    If function is decorated with @CROWDio_task, checkpoint metadata is
+    automatically used for checkpoint-aware execution.
+
+    Args:
+        func: Function to execute (optionally decorated with @CROWDio_task)
+        *args: Positional arguments for the function
+        **kwargs: Keyword arguments for the function
+
+    Returns:
+        Result from the worker
+    """
+    return await _client.run(func, *args, **kwargs)
+
+
+async def CROWDio_submit(func: Callable, iterable: List[Any], **kwargs) -> str:
+    """
+    CROWDio_submit - Non-blocking submission of a job to workers
+
+    Asynchronous job submission. Sends tasks and returns immediately with a
+    job handle for later result retrieval via CROWDio_get().
+
+    Args:
+        func: Function to execute (optionally decorated with @CROWDio_task)
+        iterable: List of arguments for tasks
+        **kwargs: Additional options
+
+    Returns:
+        job_id: Handle to retrieve results later with CROWDio_get()
+    """
+    return await _client.submit(func, iterable, **kwargs)
+
+
+async def CROWDio_get(job_id: str, timeout: Optional[float] = None) -> Any:
+    """
+    CROWDio_get - Wait for results from a non-blocking submission
+
+    Waits for results from a job submitted via CROWDio_submit().
+    Blocks until results are available or timeout is reached.
+
+    Args:
+        job_id: Job identifier from CROWDio_submit()
+        timeout: Maximum seconds to wait (None = wait indefinitely)
+
+    Returns:
+        List of results from the job
+
+    Raises:
+        TimeoutError: If timeout is exceeded before results arrive
+    """
+    return await _client.get_results(job_id, timeout)
+
+
+async def CROWDio_pipeline(
+    stages: List[Dict],
+    dependency_map: Optional[Dict[str, List[str]]] = None,
+    **kwargs,
+) -> List[Any]:
+    """
+    CROWDio_pipeline - Execute a DAG of dependent computation stages
+
+    Implements pipeline parallelism with automatic dependency management.
+    Tasks are blocked until their upstream dependencies complete
+    (tracked via a dependency counter).
+
+    Args:
+        stages: Ordered list of stage dicts, each with:
+            - func: Callable (optionally decorated with @CROWDio_task)
+            - args_list: List of arguments (one per task in this stage)
+            - pass_upstream_results: bool (default False) – if True,
+              upstream results are injected into downstream args
+            - name: Optional human-readable stage label
+        dependency_map: Optional explicit task→[deps] mapping for
+            arbitrary DAG topologies. If omitted, stages form
+            sequential barriers.
+        **kwargs: Extra options (checkpoint, checkpoint_interval, …)
+
+    Returns:
+        List of results from the final stage.
+
+    Example::
+
+        results = await CROWDio_pipeline([
+            {"func": preprocess,  "args_list": raw_data},
+            {"func": compute,     "args_list": [None]*len(raw_data),
+             "pass_upstream_results": True},
+            {"func": aggregate,   "args_list": [None],
+             "pass_upstream_results": True},
+        ])
+    """
+    return await _client.pipeline(stages, dependency_map=dependency_map, **kwargs)
+
+
+# ============================================================================
+# Declarative model jobs (optional; the Foreman plans)
+# ============================================================================
+
+async def CROWDio_submit_job(
+    model_id: str,
+    inputs: List[Any],
+    objective: str = "min_completion_time",
+    deadline_ms: Optional[float] = None,
+    options: Optional[Dict[str, Any]] = None,
+    model_version: Optional[int] = None,
+) -> JobHandle:
+    """
+    CROWDio_submit_job - Run a catalogue model on a batch of inputs
+
+    The request names a model and an objective only; the Foreman chooses the
+    cut and the workers. Inputs are validated locally against the model's
+    manifest before anything is sent.
+
+    Args:
+        model_id: Catalogue entry on the Foreman
+        inputs: Requests; each is token ids or a dict with input_ids,
+            optional attention_mask and optional request_id
+        objective: "min_completion_time" or "min_latency_with_deadline"
+        deadline_ms: Required for "min_latency_with_deadline"
+        options: Reserved hints: max_workers, allow_recut, route_mode
+        model_version: Catalogue version (default: latest)
+
+    Returns:
+        JobHandle with status(), results(), stream() and cancel()
+
+    Raises:
+        InvalidRequest: The request failed local validation
+        UnsupportedByForeman: The Foreman has no declarative path; use
+            CROWDio_pipeline instead
+    """
+    return await _client.declarative.submit_job(
+        model_id, inputs, objective, deadline_ms, options, model_version
+    )
+
+
+async def CROWDio_list_models() -> List[Dict[str, Any]]:
+    """CROWDio_list_models - Manifest summaries of every catalogue model"""
+    return await _client.declarative.list_models()
+
+
+async def CROWDio_describe_model(model_id: str, version: Optional[int] = None) -> ModelDescription:
+    """CROWDio_describe_model - Layers, cut grid, ranges, shard sizes and tensor contracts"""
+    return await _client.declarative.describe_model(model_id, version)
+
+
+async def CROWDio_capabilities(timeout: Optional[float] = None) -> Capabilities:
+    """CROWDio_capabilities - Protocol version and Foreman features from the handshake"""
+    return await _client.declarative.capabilities(timeout)
+
+
+class CROWDioNamespace:
+    """Namespace class to support @CROWDio.task decorator style."""
+
+    task = staticmethod(CROWDio_task)
+
+
+CROWDio = CROWDioNamespace()
+
+
+# ============================================================================
+# Preferred lowercase API aliases
+# ============================================================================
+
+crowdio_connect = CROWDio_connect
+crowdio_disconnect = CROWDio_disconnect
+crowdio_map = CROWDio_map
+crowdio_run = CROWDio_run
+crowdio_get = CROWDio_get
+crowdio_submit = CROWDio_submit
+crowdio_pipeline = CROWDio_pipeline
+crowdio_submit_job = CROWDio_submit_job
+crowdio_list_models = CROWDio_list_models
+crowdio_describe_model = CROWDio_describe_model
+crowdio_capabilities = CROWDio_capabilities
+submit_job = CROWDio_submit_job
+list_models = CROWDio_list_models
+describe_model = CROWDio_describe_model
+task = CROWDio_task
