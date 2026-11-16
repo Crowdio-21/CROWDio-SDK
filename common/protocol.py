@@ -252,11 +252,46 @@ def create_job_results_message(results: List[Any], job_id: str) -> Message:
     )
 
 
-def create_worker_ready_message(worker_id: str) -> Message:
-    """Create a worker ready message"""
+# Reconfiguration protocol v2 (``crowdio.reconfiguration``): what a worker can declare in worker_ready.
+V2_FLAGS = ("adaptive_planning", "direct_path", "peer_fetch", "prefetch", "problem_reports")
+V2_MESSAGES = ("probe", "msg_ack", "flags", "load", "run", "route",
+               "prefetch", "cancel_prefetch", "peer_fetch", "serve_allowed")
+
+
+def create_worker_ready_message(
+    worker_id: str,
+    *,
+    proto_version: Optional[int] = None,
+    supported_flags: Optional[List[str]] = None,
+    supported_messages: Optional[List[str]] = None,
+    worker_type: Optional[str] = None,
+) -> Message:
+    """Create a worker ready message.
+
+    A legacy worker passes only ``worker_id``. A worker that speaks the reconfiguration protocol (v2)
+    also declares ``proto_version`` (2), the feature flags it can take part in (``supported_flags``,
+    a subset of :data:`V2_FLAGS`) and the v2 messages it understands (``supported_messages``, a subset of
+    :data:`V2_MESSAGES`). The Foreman sends a worker only what it declared, so a worker that omits these
+    is never sent a v2 message.
+    """
+    data: Dict[str, Any] = {"worker_id": worker_id}
+    if proto_version is not None:
+        data["proto_version"] = int(proto_version)
+    if supported_flags is not None:
+        unknown = sorted(set(supported_flags) - set(V2_FLAGS))
+        if unknown:
+            raise ValueError(f"unknown feature flag(s) {unknown}; expected a subset of {V2_FLAGS}")
+        data["supported_flags"] = list(supported_flags)
+    if supported_messages is not None:
+        unknown = sorted(set(supported_messages) - set(V2_MESSAGES))
+        if unknown:
+            raise ValueError(f"unknown v2 message(s) {unknown}; expected a subset of {V2_MESSAGES}")
+        data["supported_messages"] = list(supported_messages)
+    if worker_type is not None:
+        data["worker_type"] = worker_type
     return Message(
         msg_type=MessageType.WORKER_READY,
-        data={"worker_id": worker_id}
+        data=data
     )
 
 

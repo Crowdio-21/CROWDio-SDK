@@ -1,0 +1,3 @@
+[console_scripts]
+crowdio-export = crowdio.export.cli:main
+crowdio-publish = crowdio.publish:main
